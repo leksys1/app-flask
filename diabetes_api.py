@@ -1,57 +1,65 @@
-import pandas as pd 
-from joblib import load
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
+import pandas as pd
+from joblib import load
 from category_encoders import BinaryEncoder
 
-api = Flask(__name__)
-CORS(api)
+# Load your trained diabetes model
+model = load("diabetes_decision_tree_model.joblib")
 
-# Load model and data
-model = load('diabetes_decision_tree_model.joblib')
+# Load the diabetes dataset for reference / encoder fitting
 x = pd.read_csv('diabetes.csv')
 
-# Identify categorical features
+# Diabetes features
 categorical_features = [col for col in ['Pregnancies', 'Glucose', 'BloodPressure', 
                                         'SkinThickness', 'Insulin', 'BMI', 
                                         'DiabetesPedigreeFunction', 'Age'] if col in x.columns]
 
-# Fit encoder
+# Initialize encoder (if needed)
 encoder = BinaryEncoder()
 if categorical_features:
-    x_encoded = encoder.fit_transform(x[categorical_features])
+    encoder.fit(x[categorical_features])
 
-# Prediction route
-# No encoding needed, just ensure input order matches model training
+# Initialize Flask app
+api = Flask(__name__)
+CORS(api)  # Enable CORS globally
 
-@api.post("/htf_prediction")
+@api.route('/predict', methods=['POST', 'OPTIONS'])
+@cross_origin(origins='*')
 def predict_follow_up_check_up():
-    data = request.get_json()
-    input_df = pd.DataFrame([data])
+    if request.method == 'OPTIONS':
+        # CORS preflight
+        return '', 200
 
-    # Make sure the input has all expected columns
-    expected_features = ['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 
-                         'Insulin', 'BMI', 'DiabetesPedigreeFunction', 'Age']
-    
-    missing = [feat for feat in expected_features if feat not in input_df.columns]
-    if missing:
-        return jsonify({"error": f"Missing features: {missing}"}), 400
+    try:
+        data = request.get_json()
+        input_df = pd.DataFrame([data])
 
-    # Reorder columns to expected order
-    input_df = input_df[expected_features]
+        expected_features = ['Pregnancies', 'Glucose', 'BloodPressure', 'SkinThickness', 
+                             'Insulin', 'BMI', 'DiabetesPedigreeFunction', 'Age']
 
-    prediction = model.predict_proba(input_df)
-    class_labels = model.classes_
+        missing = [feat for feat in expected_features if feat not in input_df.columns]
+        if missing:
+            return jsonify({"error": f"Missing features: {missing}"}), 400
 
-    response = []
-    for prob in prediction:
-        prob_dict = {str(k): round(float(v) * 100, 2) for k, v in zip(class_labels, prob)}
-        response.append(prob_dict)
+        # Ensure column order
+        input_df = input_df[expected_features]
 
-    return jsonify({"Prediction": response})
+        # If you want to encode, uncomment:
+        # input_df = encoder.transform(input_df)
 
+        prediction = model.predict_proba(input_df)
+        class_labels = model.classes_
 
+        response = []
+        for prob in prediction:
+            prob_dict = {str(k): round(float(v) * 100, 2) for k, v in zip(class_labels, prob)}
+            response.append(prob_dict)
 
-# Run the app
-if __name__ == '__main__':
-    api.run(debug=True, port=8000)
+        return jsonify({"Prediction": response})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+if __name__ == "__main__":
+    api.run(debug=True, host='0.0.0.0', port=5000)
