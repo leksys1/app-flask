@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Diabetes Prediction</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f0f4f8;
+    margin: 0; padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+
+  .container {
+    background: white;
+    max-width: 600px;   
+    width: 100%;
+    padding: 30px 40px;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    box-sizing: border-box;
+  }
+
+  h1 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 30px;
+  }
+
+  form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(250px, 1fr)); 
+    gap: 24px 30px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  label {
+    margin-bottom: 6px;
+    font-weight: 600;
+    color: #555;
+    white-space: nowrap; 
+  }
+
+  input[type="number"] {
+    width: 100%;
+    padding: 14px 18px;
+    font-size: 1rem;
+    border-radius: 12px;
+    border: 2px solid #ddd;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    font-weight: 500;
+    color: #333;
+    box-sizing: border-box;
+  }
+  input[type="number"]:focus {
+    border-color: #2575fc;
+    outline: none;
+    box-shadow: 0 0 8px rgba(37,117,252,0.4);
+  }
+
+  button {
+    grid-column: 1 / -1;
+    margin-top: 10px;
+    width: 100%;
+    background-color: #4a90e2;
+    border: none;
+    color: white;
+    font-weight: 700;
+    padding: 14px 0;
+    font-size: 18px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+  button:hover {
+    background-color: #357abd;
+  }
+
+  #result {
+    margin-top: 25px;
+    padding: 15px 20px;
+    border-radius: 8px;
+    background-color: #e8f0fe;
+    font-size: 16px;
+    color: #222;
+    white-space: pre-wrap;
+    min-height: 80px;
+  }
+
+  .message {
+    margin-top: 15px;
+    font-weight: 700;
+    font-size: 18px;
+    color: #222;
+    text-align: center;
+  }
+  .positive {
+    color: #d93025; /* red for diabetes likely */
+  }
+  .negative {
+    color: #188038; /* green for no diabetes */
+  }
+  .uncertain {
+    color: #b28704; /* golden/yellow for uncertain */
+  }
+
+
+  @media (max-width: 640px) {
+    form {
+      grid-template-columns: 1fr;
+      gap: 18px 0;
+    }
+    button {
+      grid-column: auto;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Diabetes Prediction</h1>
+  <form id="predictionForm" novalidate>
+    <div class="form-group">
+      <label for="Pregnancies">Pregnancies</label>
+      <input type="number" id="Pregnancies" name="Pregnancies" min="0" step="1" placeholder="e.g. 2" required />
+    </div>
+
+    <div class="form-group">
+      <label for="Glucose">Glucose</label>
+      <input type="number" id="Glucose" name="Glucose" min="0" step="any" placeholder="e.g. 120" required />
+    </div>
+
+    <div class="form-group">
+      <label for="BloodPressure">Blood Pressure</label>
+      <input type="number" id="BloodPressure" name="BloodPressure" min="0" step="any" placeholder="e.g. 70" required />
+    </div>
+
+    <div class="form-group">
+      <label for="SkinThickness">Skin Thickness</label>
+      <input type="number" id="SkinThickness" name="SkinThickness" min="0" step="any" placeholder="e.g. 20" required />
+    </div>
+
+    <div class="form-group">
+      <label for="Insulin">Insulin</label>
+      <input type="number" id="Insulin" name="Insulin" min="0" step="any" placeholder="e.g. 85" required />
+    </div>
+
+    <div class="form-group">
+      <label for="BMI">BMI</label>
+      <input type="number" id="BMI" name="BMI" min="0" step="any" placeholder="e.g. 30.5" required />
+    </div>
+
+    <div class="form-group">
+      <label for="DiabetesPedigreeFunction">Diabetes Pedigree Function</label>
+      <input type="number" id="DiabetesPedigreeFunction" name="DiabetesPedigreeFunction" min="0" step="any" placeholder="e.g. 0.5" required />
+    </div>
+
+    <div class="form-group">
+      <label for="Age">Age</label>
+      <input type="number" id="Age" name="Age" min="0" step="1" placeholder="e.g. 35" required />
+    </div>
+
+    <button type="submit" aria-label="Predict Diabetes">Predict</button>
+  </form>
+
+  <div id="result"></div>
+  <div id="message" class="message"></div>
+</div>
+
+<script>
+  const form = document.getElementById('predictionForm');
+  const resultDiv = document.getElementById('result');
+  const messageDiv = document.getElementById('message');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    // Clear previous
+    resultDiv.textContent = '';
+    messageDiv.textContent = '';
+    messageDiv.className = 'message';
+
+    // Collect input data
+    const data = {};
+    new FormData(form).forEach((value, key) => {
+      data[key] = Number(value);
+    });
+
+    try {
+      const response = await fetch('http://localhost:8000/htf_prediction', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        resultDiv.textContent = 'Error: ' + (err.error || 'Unknown error');
+        return;
+      }
+
+      const json = await response.json();
+      const pred = json.Prediction[0];
+
+      let output = 'Prediction Probabilities:\n';
+      for (const [cls, prob] of Object.entries(pred)) {
+        let label = cls === '0' ? 'No Diabetes' : 'Diabetes';
+        output += `${label}: ${prob}%\n`;
+      }
+      resultDiv.textContent = output;
+
+  
+      const prob0 = pred['0'];
+      const prob1 = pred['1'];
+      const diff = Math.abs(prob0 - prob1);
+
+      if (diff <= 5) {
+        messageDiv.textContent = "Prediction: Uncertain - probabilities are very close.";
+        messageDiv.classList.add('uncertain');
+      } else if (prob1 > prob0) {
+        messageDiv.textContent = "Prediction: Likely HAS diabetes.";
+        messageDiv.classList.add('positive');
+      } else {
+        messageDiv.textContent = "Prediction: Likely DOES NOT have diabetes.";
+        messageDiv.classList.add('negative');
+      }
+
+    } catch (error) {
+      resultDiv.textContent = 'Error: ' + error.message;
+    }
+  });
+</script>
+
+</body>
+</html>
